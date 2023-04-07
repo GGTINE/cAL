@@ -38,7 +38,7 @@ class ActiveTrainer(DefaultTrainer):
         with matching heuristics.
         """
         cfg = DefaultTrainer.auto_scale_workers(cfg, comm.get_world_size())
-
+        self.accumulation = 4
         self.accumulate_steps = 0
 
         # Student 모델 생성
@@ -145,10 +145,10 @@ class ActiveTrainer(DefaultTrainer):
 
             if self.cfg.SOLVER.AMP.ENABLED:
                 with autocast():
-                    losses = sum(loss_dict.values()) / 2
-                    self._trainer.grad_scaler.scale(losses).backward()
+                    losses = sum(loss_dict.values()) / self.accumulation
+                self._trainer.grad_scaler.scale(losses).backward()
             else:
-                losses = sum(loss_dict.values()) / 2
+                losses = sum(loss_dict.values()) / self.accumulation
                 losses.backward()
 
         else:
@@ -215,27 +215,30 @@ class ActiveTrainer(DefaultTrainer):
                     if key[-6:] == "pseudo":
                         # regression loss
                         if key[-10:-7] == "loc":
-                            loss_dict[key] = record_dict[key] * self.cfg.SEMISUPNET.UNSUP_REG_LOSS_WEIGHT
+                            loss_dict[key] = record_dict[key] * self.cfg.SEMISUPNET.UNSUP_REG_LOSS_WEIGHT / (1 + self.cfg.SEMISUPNET.UNSUP_REG_LOSS_WEIGHT)
                         # cls, ctr loss
                         else:
-                            loss_dict[key] = record_dict[key] * self.cfg.SEMISUPNET.UNSUP_LOSS_WEIGHT
+                            loss_dict[key] = record_dict[key] * self.cfg.SEMISUPNET.UNSUP_LOSS_WEIGHT / (1 + self.cfg.SEMISUPNET.UNSUP_LOSS_WEIGHT)
                     # supervised loss
                     else:
-                        loss_dict[key] = record_dict[key] * 1
+                        if key[10:] == "loc":
+                            loss_dict[key] = record_dict[key] / (1 + self.cfg.SEMISUPNET.UNSUP_REG_LOSS_WEIGHT) 
+                        else:
+                            loss_dict[key] = record_dict[key] / (1 + self.cfg.SEMISUPNET.UNSUP_LOSS_WEIGHT)
 
             if self.cfg.SOLVER.AMP.ENABLED:
                 with autocast():
-                    losses = sum(loss_dict.values()) / 2
-                    self._trainer.grad_scaler.scale(losses).backward()
+                    losses = sum(loss_dict.values()) / self.accumulation
+                self._trainer.grad_scaler.scale(losses).backward()
             else:
-                losses = sum(loss_dict.values()) / 2
+                losses = sum(loss_dict.values()) / self.accumulation
                 losses.backward()
 
         self._write_metrics(loss_dict)
 
         self.accumulate_steps += 1
 
-        if self.accumulate_steps % 2 == 0:
+        if self.accumulate_steps % self.accumulation == 0:
             if self.cfg.SOLVER.AMP.ENABLED:
                 self._trainer.grad_scaler.step(self.optimizer)
                 self._trainer.grad_scaler.update()
