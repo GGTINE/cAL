@@ -58,30 +58,6 @@ class FCOS(nn.Module):
 
         self.fcos_outputs = FCOSOutputs(cfg)
 
-    def forward_head(self, features, top_module=None):
-        features = [features[f] for f in self.in_features]
-        if self.kl_loss:
-            (
-                pred_class_logits,
-                pred_deltas,
-                reg_pred,
-                pred_centerness,
-                top_feats,
-                bbox_towers,
-            ) = self.fcos_head(features, top_module, self.yield_proposal)
-
-            return pred_class_logits, pred_deltas, reg_pred, pred_centerness, top_feats, bbox_towers
-        else:
-            (
-                pred_class_logits,
-                pred_deltas,
-                pred_centerness,
-                top_feats,
-                bbox_towers,
-            ) = self.fcos_head(features, top_module, self.yield_proposal)
-
-            return pred_class_logits, pred_deltas, pred_centerness, top_feats, bbox_towers
-
     def forward(
         self,
         images,
@@ -105,33 +81,23 @@ class FCOS(nn.Module):
         # accumlate feature pred for pseudo-labeling
         raw_output = {}
 
-        if self.kl_loss:
-            (
-                logits_pred,
-                reg_pred,
-                reg_pred_std,
-                ctrness_pred,
-                top_feats,
-                bbox_towers,
-            ) = self.fcos_head(features, top_module, self.yield_proposal)
-            raw_output["reg_pred_std"] = reg_pred_std
-            raw_output["logits_pred"] = logits_pred
-            raw_output["reg_pred"] = reg_pred
-            raw_output["top_feats"] = top_feats
-            raw_output["bbox_towers"] = bbox_towers
-            raw_output["locations"] = locations
-            raw_output["ctrness_pred"] = ctrness_pred
-            raw_output["image_sizes"] = images.image_sizes
+        (
+            logits_pred,
+            reg_pred,
+            reg_pred_std,
+            ctrness_pred,
+            top_feats,
+            bbox_towers,
+        ) = self.fcos_head(features, top_module, self.yield_proposal)
 
-        else:
-            (
-                logits_pred,
-                reg_pred,
-                ctrness_pred,
-                top_feats,
-                bbox_towers,
-            ) = self.fcos_head(features, top_module, self.yield_proposal)
-            reg_pred_std = None
+        raw_output["reg_pred_std"] = reg_pred_std
+        raw_output["logits_pred"] = logits_pred
+        raw_output["reg_pred"] = reg_pred
+        raw_output["top_feats"] = top_feats
+        raw_output["bbox_towers"] = bbox_towers
+        raw_output["locations"] = locations
+        raw_output["ctrness_pred"] = ctrness_pred
+        raw_output["image_sizes"] = images.image_sizes
 
         if self.training:
             losses = self.fcos_outputs.losses(
@@ -324,11 +290,10 @@ class FCOSHead(nn.Module):
             if self.kl_loss:
                 reg_std = self.bbox_pred_std(bbox_tower)
                 bbox_reg_std.append(reg_std)
+            else:
+                bbox_reg_std = None
 
             if top_module is not None:
                 top_feats.append(top_module(bbox_tower))
 
-        if self.kl_loss:  # additional box prediction std output
-            return logits, bbox_reg, bbox_reg_std, ctrness, top_feats, bbox_towers
-        else:
-            return logits, bbox_reg, ctrness, top_feats, bbox_towers
+        return logits, bbox_reg, bbox_reg_std, ctrness, top_feats, bbox_towers

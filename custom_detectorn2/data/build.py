@@ -238,8 +238,8 @@ def build_semisup_batch_data_loader_two_crop(
             label_dataset,
             sampler=label_sampler,
             num_workers=num_workers,
-            batch_sampler=None,
             collate_fn=operator.itemgetter(0),
+            pin_memory=True,
             worker_init_fn=worker_init_reset_seed,
         )  # yield individual mapped dict
 
@@ -247,8 +247,8 @@ def build_semisup_batch_data_loader_two_crop(
             unlabel_dataset,
             sampler=unlabel_sampler,
             num_workers=num_workers,
-            batch_sampler=None,
             collate_fn=operator.itemgetter(0),
+            pin_memory=True,
             worker_init_fn=worker_init_reset_seed,
         )  # yield individual mapped dict
 

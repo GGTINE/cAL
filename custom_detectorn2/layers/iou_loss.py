@@ -20,7 +20,7 @@ class IOULoss(nn.Module):
         super(IOULoss, self).__init__()
         self.loc_loss_type = loc_loss_type
 
-    def forward(self, pred, target, weight=None):
+    def forward(self, pred, target, weight=None, loss_denorm=None):
         """
         Args:
             pred: Nx4 predicted bounding boxes
@@ -51,6 +51,7 @@ class IOULoss(nn.Module):
         area_union = target_aera + pred_aera - area_intersect
 
         ious = (area_intersect + 1.0) / (area_union + 1.0)
+
         if self.loc_loss_type == "iou":
             losses = -torch.log(ious)
         elif self.loc_loss_type == "linear_iou":
@@ -71,6 +72,6 @@ class IOULoss(nn.Module):
             raise NotImplementedError
 
         if weight is not None:
-            return (losses * weight).sum()
+            return ious, (losses * weight).sum() / loss_denorm
         else:
             return losses.sum()

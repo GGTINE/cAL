@@ -45,7 +45,7 @@ class ActiveTrainer(DefaultTrainer):
         with matching heuristics.
         """
         cfg = DefaultTrainer.auto_scale_workers(cfg, comm.get_world_size())
-        self.accumulation = 4
+        self.accumulation = 2
         self.accumulate_steps = 0
 
         # Student 모델 생성
@@ -163,23 +163,23 @@ class ActiveTrainer(DefaultTrainer):
             if self.iter == self.cfg.SEMISUPNET.BURN_UP_STEP:
                 self._update_teacher_model(keep_rate=0.00)
 
-            #     unlabel_data_q = remove_label(unlabel_data_q)
-            #     unlabel_data_k = remove_label(unlabel_data_k)
-            #
-            # with torch.no_grad():
-            #     pred_teacher, raw_pred_teacher = self.model_teacher(
-            #         unlabel_data_k,
-            #         output_raw=True,
-            #         nms_method=self.cfg.MODEL.FCOS.NMS_CRITERIA_TRAIN,
-            #         branch="teacher_weak",
-            #     )
-            #
-            # self.create_pseudo_label(
-            #     unlabel_data=unlabel_data_q,
-            #     pred_teacher=pred_teacher,
-            #     raw_pred_teacher=raw_pred_teacher,
-            #     nms_method=self.cfg.MODEL.FCOS.NMS_CRITERIA_REG_TRAIN,
-            # )
+                unlabel_data_q = remove_label(unlabel_data_q)
+                unlabel_data_k = remove_label(unlabel_data_k)
+
+            with torch.no_grad():
+                pred_teacher, raw_pred_teacher = self.model_teacher(
+                    unlabel_data_k,
+                    output_raw=True,
+                    nms_method=self.cfg.MODEL.FCOS.NMS_CRITERIA_TRAIN,
+                    branch="teacher_weak",
+                )
+
+            self.create_pseudo_label(
+                unlabel_data=unlabel_data_q,
+                pred_teacher=pred_teacher,
+                raw_pred_teacher=raw_pred_teacher,
+                nms_method=self.cfg.MODEL.FCOS.NMS_CRITERIA_REG_TRAIN,
+            )
 
             with autocast(self.cfg.SOLVER.AMP.ENABLED):
                 record_dict = self.model(label_data_q, branch="labeled")
