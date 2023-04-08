@@ -11,7 +11,16 @@ class KLLoss(nn.Module):
     def __init__(self):
         super(KLLoss, self).__init__()
 
-    def forward(self, input, input_std, target, weight=None, beta=1.0, loss_denorm=None, method="weight_ctr_sum"):
+    def forward(
+        self,
+        input,
+        input_std,
+        target,
+        weight=None,
+        beta=1.0,
+        loss_denorm=None,
+        method="weight_ctr_sum",
+    ):
         if beta < 1e-5:
             # if beta == 0, then torch.where will result in nan gradients when
             # the chain rule is applied due to pytorch implementation details
@@ -51,7 +60,9 @@ class NLLoss(nn.Module):
         sigma_sq = torch.square(input_std.sigmoid())
         first_term = torch.square(target - input) / (2 * sigma_sq)
         second_term = 0.5 * torch.log(sigma_sq)
-        sum_before_iou = (first_term + second_term).sum(dim=1) + 2 * torch.log(2 * torch.Tensor([torch.pi]).cuda())
+        sum_before_iou = (first_term + second_term).sum(dim=1) + 2 * torch.log(
+            2 * torch.Tensor([torch.pi]).cuda()
+        )
         loss_mean = (sum_before_iou * iou_weight).mean()
 
         return loss_mean

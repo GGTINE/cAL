@@ -7,16 +7,18 @@ from detectron2.data import DatasetCatalog, MetadataCatalog
 from detectron2.utils.file_io import PathManager
 
 JSON_ANNOTATIONS_DIR = ""
-_SPLITS_COCO_FORMAT = {"coco": {
-    "coco_2017_unlabel": (
-        "memcache_manifold://mobile_vision_dataset/tree/coco_unlabel2017",
-        "memcache_manifold://mobile_vision_dataset/tree/coco_unlabel2017/coco_jsons/image_info_unlabeled2017.json",
-    ),
-    "coco_2017_for_voc20": (
-        "coco",
-        "coco/annotations/google/instances_unlabeledtrainval20class.json",
-    ),
-}}
+_SPLITS_COCO_FORMAT = {
+    "coco": {
+        "coco_2017_unlabel": (
+            "memcache_manifold://mobile_vision_dataset/tree/coco_unlabel2017",
+            "memcache_manifold://mobile_vision_dataset/tree/coco_unlabel2017/coco_jsons/image_info_unlabeled2017.json",
+        ),
+        "coco_2017_for_voc20": (
+            "coco",
+            "coco/annotations/google/instances_unlabeledtrainval20class.json",
+        ),
+    }
+}
 
 
 def register_coco_unlabel():
@@ -48,14 +50,20 @@ def register_coco_unlabel_instances(name, metadata, json_file, image_root):
     assert isinstance(image_root, (str, os.PathLike)), image_root
 
     # 1. register a function which returns dicts
-    DatasetCatalog.register(name, lambda: load_coco_unlabel_json(json_file, image_root, name))
+    DatasetCatalog.register(
+        name, lambda: load_coco_unlabel_json(json_file, image_root, name)
+    )
 
     # 2. Optionally, add metadata about this dataset,
     # since they might be useful in evaluation, visualization or logging
-    MetadataCatalog.get(name).set(json_file=json_file, image_root=image_root, evaluator_type="coco", **metadata)
+    MetadataCatalog.get(name).set(
+        json_file=json_file, image_root=image_root, evaluator_type="coco", **metadata
+    )
 
 
-def load_coco_unlabel_json(json_file, image_root, dataset_name=None, extra_annotation_keys=None):
+def load_coco_unlabel_json(
+    json_file, image_root, dataset_name=None, extra_annotation_keys=None
+):
     from pycocotools.coco import COCO
 
     json_file = PathManager.get_local_path(json_file)
@@ -68,7 +76,11 @@ def load_coco_unlabel_json(json_file, image_root, dataset_name=None, extra_annot
     dataset_dicts = []
 
     for img_dict in imgs:
-        record = {"file_name": os.path.join(image_root, img_dict["file_name"]), "height": img_dict["height"], "width": img_dict["width"]}
+        record = {
+            "file_name": os.path.join(image_root, img_dict["file_name"]),
+            "height": img_dict["height"],
+            "width": img_dict["width"],
+        }
         dataset_dicts.append(record)
 
     return dataset_dicts

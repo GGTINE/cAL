@@ -28,7 +28,9 @@ def main(args):
         model_teacher = active_trainer.build_model(cfg)
         ensem_ts_model = EnsembleTSModel(model_teacher, model)
 
-        DetectionCheckpointer(ensem_ts_model, save_dir=cfg.OUTPUT_DIR).resume_or_load(cfg.MODEL.WEIGHTS, resume=args.resume)
+        DetectionCheckpointer(ensem_ts_model, save_dir=cfg.OUTPUT_DIR).resume_or_load(
+            cfg.MODEL.WEIGHTS, resume=args.resume
+        )
         res = active_trainer.test(cfg, ensem_ts_model.modelTeacher)
 
         return res
@@ -44,4 +46,11 @@ if __name__ == "__main__":
     args.config_file = "./configs/fcos/sup1.yaml"
 
     print("Command Line Args:", args)
-    launch(main, args.num_gpus, num_machines=args.num_machines, machine_rank=args.machine_rank, dist_url=args.dist_url, args=(args,))
+    launch(
+        main,
+        args.num_gpus,
+        num_machines=args.num_machines,
+        machine_rank=args.machine_rank,
+        dist_url=args.dist_url,
+        args=(args,),
+    )

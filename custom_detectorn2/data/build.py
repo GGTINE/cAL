@@ -4,10 +4,19 @@ import operator
 
 import numpy as np
 import torch.utils.data
-from detectron2.data.build import build_batch_data_loader, get_detection_dataset_dicts, trivial_batch_collator, worker_init_reset_seed
+from detectron2.data.build import (
+    build_batch_data_loader,
+    get_detection_dataset_dicts,
+    trivial_batch_collator,
+    worker_init_reset_seed,
+)
 from detectron2.data.common import DatasetFromList, MapDataset
 from detectron2.data.dataset_mapper import DatasetMapper
-from detectron2.data.samplers import InferenceSampler, RepeatFactorTrainingSampler, TrainingSampler
+from detectron2.data.samplers import (
+    InferenceSampler,
+    RepeatFactorTrainingSampler,
+    TrainingSampler,
+)
 from detectron2.utils.file_io import PathManager
 from detectron2.utils.comm import get_world_size
 
@@ -18,7 +27,9 @@ This file contains the default logic to build a dataloader for training or testi
 """
 
 
-def divide_label_unlabel(dataset_dicts, SupPercent, random_data_seed, random_data_seed_path):
+def divide_label_unlabel(
+    dataset_dicts, SupPercent, random_data_seed, random_data_seed_path
+):
     num_all = len(dataset_dicts)
     num_label = int(SupPercent / 100.0 * num_all)
 
@@ -44,13 +55,24 @@ def divide_label_unlabel(dataset_dicts, SupPercent, random_data_seed, random_dat
 
 # uesed by supervised-only baseline trainer
 def build_detection_semisup_train_loader(cfg, mapper=None):
-    dataset_dicts = get_detection_dataset_dicts(cfg.DATASETS.TRAIN, filter_empty=cfg.DATALOADER.FILTER_EMPTY_ANNOTATIONS,
-        min_keypoints=cfg.MODEL.ROI_KEYPOINT_HEAD.MIN_KEYPOINTS_PER_IMAGE if cfg.MODEL.KEYPOINT_ON else 0,
-        proposal_files=cfg.DATASETS.PROPOSAL_FILES_TRAIN if cfg.MODEL.LOAD_PROPOSALS else None)
+    dataset_dicts = get_detection_dataset_dicts(
+        cfg.DATASETS.TRAIN,
+        filter_empty=cfg.DATALOADER.FILTER_EMPTY_ANNOTATIONS,
+        min_keypoints=cfg.MODEL.ROI_KEYPOINT_HEAD.MIN_KEYPOINTS_PER_IMAGE
+        if cfg.MODEL.KEYPOINT_ON
+        else 0,
+        proposal_files=cfg.DATASETS.PROPOSAL_FILES_TRAIN
+        if cfg.MODEL.LOAD_PROPOSALS
+        else None,
+    )
 
     # Divide into labeled and unlabeled sets according to supervision percentage
-    label_dicts, unlabel_dicts = divide_label_unlabel(dataset_dicts, cfg.DATALOADER.SUP_PERCENT, cfg.DATALOADER.RANDOM_DATA_SEED,
-                                                      cfg.DATALOADER.RANDOM_DATA_SEED_PATH)
+    label_dicts, unlabel_dicts = divide_label_unlabel(
+        dataset_dicts,
+        cfg.DATALOADER.SUP_PERCENT,
+        cfg.DATALOADER.RANDOM_DATA_SEED,
+        cfg.DATALOADER.RANDOM_DATA_SEED_PATH,
+    )
 
     dataset = DatasetFromList(label_dicts, copy=False)
 
@@ -62,20 +84,37 @@ def build_detection_semisup_train_loader(cfg, mapper=None):
     if sampler_name == "TrainingSampler":
         sampler = TrainingSampler(len(dataset))
     elif sampler_name == "RepeatFactorTrainingSampler":
-        repeat_factors = (RepeatFactorTrainingSampler.repeat_factors_from_category_frequency(label_dicts, cfg.DATALOADER.REPEAT_THRESHOLD))
+        repeat_factors = (
+            RepeatFactorTrainingSampler.repeat_factors_from_category_frequency(
+                label_dicts, cfg.DATALOADER.REPEAT_THRESHOLD
+            )
+        )
         sampler = RepeatFactorTrainingSampler(repeat_factors)
     else:
         raise ValueError("Unknown training sampler: {}".format(sampler_name))
 
-    return build_batch_data_loader(dataset, sampler, cfg.SOLVER.IMS_PER_BATCH, aspect_ratio_grouping=cfg.DATALOADER.ASPECT_RATIO_GROUPING,
-                                   num_workers=cfg.DATALOADER.NUM_WORKERS)
+    return build_batch_data_loader(
+        dataset,
+        sampler,
+        cfg.SOLVER.IMS_PER_BATCH,
+        aspect_ratio_grouping=cfg.DATALOADER.ASPECT_RATIO_GROUPING,
+        num_workers=cfg.DATALOADER.NUM_WORKERS,
+    )
 
 
 # uesed by evaluation
 def build_detection_test_loader(cfg, dataset_name, mapper=None):
-    dataset_dicts = get_detection_dataset_dicts([dataset_name], filter_empty=False,
-                                                proposal_files=[cfg.DATASETS.PROPOSAL_FILES_TEST[list(cfg.DATASETS.TEST).index(dataset_name)]]
-                                                if cfg.MODEL.LOAD_PROPOSALS else None)
+    dataset_dicts = get_detection_dataset_dicts(
+        [dataset_name],
+        filter_empty=False,
+        proposal_files=[
+            cfg.DATASETS.PROPOSAL_FILES_TEST[
+                list(cfg.DATASETS.TEST).index(dataset_name)
+            ]
+        ]
+        if cfg.MODEL.LOAD_PROPOSALS
+        else None,
+    )
 
     dataset = DatasetFromList(dataset_dicts)
     if mapper is None:
@@ -86,7 +125,11 @@ def build_detection_test_loader(cfg, dataset_name, mapper=None):
     batch_sampler = torch.utils.data.sampler.BatchSampler(sampler, 1, drop_last=False)
 
     data_loader = torch.utils.data.DataLoader(
-        dataset, num_workers=cfg.DATALOADER.NUM_WORKERS, batch_sampler=batch_sampler, collate_fn=trivial_batch_collator)
+        dataset,
+        num_workers=cfg.DATALOADER.NUM_WORKERS,
+        batch_sampler=batch_sampler,
+        collate_fn=trivial_batch_collator,
+    )
     return data_loader
 
 
@@ -96,25 +139,44 @@ def build_detection_semisup_train_loader_two_crops(cfg, mapper=None):
         label_dicts = get_detection_dataset_dicts(
             cfg.DATASETS.TRAIN_LABEL,
             filter_empty=cfg.DATALOADER.FILTER_EMPTY_ANNOTATIONS,
-            min_keypoints=cfg.MODEL.ROI_KEYPOINT_HEAD.MIN_KEYPOINTS_PER_IMAGE if cfg.MODEL.KEYPOINT_ON else 0,
-            proposal_files=cfg.DATASETS.PROPOSAL_FILES_TRAIN if cfg.MODEL.LOAD_PROPOSALS else None)
+            min_keypoints=cfg.MODEL.ROI_KEYPOINT_HEAD.MIN_KEYPOINTS_PER_IMAGE
+            if cfg.MODEL.KEYPOINT_ON
+            else 0,
+            proposal_files=cfg.DATASETS.PROPOSAL_FILES_TRAIN
+            if cfg.MODEL.LOAD_PROPOSALS
+            else None,
+        )
 
         unlabel_dicts = get_detection_dataset_dicts(
             cfg.DATASETS.TRAIN_UNLABEL,
             filter_empty=False,
-            min_keypoints=cfg.MODEL.ROI_KEYPOINT_HEAD.MIN_KEYPOINTS_PER_IMAGE if cfg.MODEL.KEYPOINT_ON else 0,
-            proposal_files=cfg.DATASETS.PROPOSAL_FILES_TRAIN if cfg.MODEL.LOAD_PROPOSALS else None)
+            min_keypoints=cfg.MODEL.ROI_KEYPOINT_HEAD.MIN_KEYPOINTS_PER_IMAGE
+            if cfg.MODEL.KEYPOINT_ON
+            else 0,
+            proposal_files=cfg.DATASETS.PROPOSAL_FILES_TRAIN
+            if cfg.MODEL.LOAD_PROPOSALS
+            else None,
+        )
 
     else:  # different degree of supervision (e.g., COCO-supervision)
         dataset_dicts = get_detection_dataset_dicts(
             cfg.DATASETS.TRAIN,
             filter_empty=cfg.DATALOADER.FILTER_EMPTY_ANNOTATIONS,
-            min_keypoints=cfg.MODEL.ROI_KEYPOINT_HEAD.MIN_KEYPOINTS_PER_IMAGE if cfg.MODEL.KEYPOINT_ON else 0,
-            proposal_files=cfg.DATASETS.PROPOSAL_FILES_TRAIN if cfg.MODEL.LOAD_PROPOSALS else None)
+            min_keypoints=cfg.MODEL.ROI_KEYPOINT_HEAD.MIN_KEYPOINTS_PER_IMAGE
+            if cfg.MODEL.KEYPOINT_ON
+            else 0,
+            proposal_files=cfg.DATASETS.PROPOSAL_FILES_TRAIN
+            if cfg.MODEL.LOAD_PROPOSALS
+            else None,
+        )
 
         # Divide into labeled and unlabeled sets according to supervision percentage
         label_dicts, unlabel_dicts = divide_label_unlabel(
-            dataset_dicts, cfg.DATALOADER.SUP_PERCENT, cfg.DATALOADER.RANDOM_DATA_SEED, cfg.DATALOADER.RANDOM_DATA_SEED_PATH)
+            dataset_dicts,
+            cfg.DATALOADER.SUP_PERCENT,
+            cfg.DATALOADER.RANDOM_DATA_SEED,
+            cfg.DATALOADER.RANDOM_DATA_SEED_PATH,
+        )
 
     label_dataset = DatasetFromList(label_dicts, copy=False)
     # exclude the labeled set from unlabeled dataset
@@ -135,21 +197,34 @@ def build_detection_semisup_train_loader_two_crops(cfg, mapper=None):
         raise NotImplementedError("{} not yet supported.".format(sampler_name))
     else:
         raise ValueError("Unknown training sampler: {}".format(sampler_name))
-    return build_semisup_batch_data_loader_two_crop((label_dataset, unlabel_dataset), (label_sampler, unlabel_sampler),
-                                                    cfg.SOLVER.IMG_PER_BATCH_LABEL, cfg.SOLVER.IMG_PER_BATCH_UNLABEL,
-                                                    aspect_ratio_grouping=cfg.DATALOADER.ASPECT_RATIO_GROUPING,
-                                                    num_workers=cfg.DATALOADER.NUM_WORKERS)
+    return build_semisup_batch_data_loader_two_crop(
+        (label_dataset, unlabel_dataset),
+        (label_sampler, unlabel_sampler),
+        cfg.SOLVER.IMG_PER_BATCH_LABEL,
+        cfg.SOLVER.IMG_PER_BATCH_UNLABEL,
+        aspect_ratio_grouping=cfg.DATALOADER.ASPECT_RATIO_GROUPING,
+        num_workers=cfg.DATALOADER.NUM_WORKERS,
+    )
 
 
 # batch data loader
-def build_semisup_batch_data_loader_two_crop(dataset, sampler, total_batch_size_label, total_batch_size_unlabel,
-                                             *, aspect_ratio_grouping=False, num_workers=0):
+def build_semisup_batch_data_loader_two_crop(
+    dataset,
+    sampler,
+    total_batch_size_label,
+    total_batch_size_unlabel,
+    *,
+    aspect_ratio_grouping=False,
+    num_workers=0,
+):
     world_size = get_world_size()
-    assert (total_batch_size_label > 0 and total_batch_size_label % world_size == 0), \
-        f"Total label batch size ({total_batch_size_label}) must be divisible by the number of gpus ({world_size})."
+    assert (
+        total_batch_size_label > 0 and total_batch_size_label % world_size == 0
+    ), f"Total label batch size ({total_batch_size_label}) must be divisible by the number of gpus ({world_size})."
 
-    assert (total_batch_size_unlabel > 0 and total_batch_size_unlabel % world_size == 0), \
-        f"Total unlabel batch size ({total_batch_size_label}) must be divisible by the number of gpus ({world_size})."
+    assert (
+        total_batch_size_unlabel > 0 and total_batch_size_unlabel % world_size == 0
+    ), f"Total unlabel batch size ({total_batch_size_label}) must be divisible by the number of gpus ({world_size})."
 
     batch_size_label = total_batch_size_label // world_size
     batch_size_unlabel = total_batch_size_unlabel // world_size
@@ -160,13 +235,26 @@ def build_semisup_batch_data_loader_two_crop(dataset, sampler, total_batch_size_
     if aspect_ratio_grouping:
         # don't batch, but yield individual elements
         label_data_loader = torch.utils.data.DataLoader(
-            label_dataset, sampler=label_sampler, num_workers=num_workers, batch_sampler=None, collate_fn=operator.itemgetter(0),
-            worker_init_fn=worker_init_reset_seed)  # yield individual mapped dict
+            label_dataset,
+            sampler=label_sampler,
+            num_workers=num_workers,
+            batch_sampler=None,
+            collate_fn=operator.itemgetter(0),
+            worker_init_fn=worker_init_reset_seed,
+        )  # yield individual mapped dict
 
-        unlabel_data_loader = torch.utils.data.DataLoader(unlabel_dataset, sampler=unlabel_sampler, num_workers=num_workers,
-                                                          batch_sampler=None, collate_fn=operator.itemgetter(0),
-                                                          worker_init_fn=worker_init_reset_seed)  # yield individual mapped dict
+        unlabel_data_loader = torch.utils.data.DataLoader(
+            unlabel_dataset,
+            sampler=unlabel_sampler,
+            num_workers=num_workers,
+            batch_sampler=None,
+            collate_fn=operator.itemgetter(0),
+            worker_init_fn=worker_init_reset_seed,
+        )  # yield individual mapped dict
 
-        return AspectRatioGroupedSemiSupDatasetTwoCrop((label_data_loader, unlabel_data_loader), (batch_size_label, batch_size_unlabel))
+        return AspectRatioGroupedSemiSupDatasetTwoCrop(
+            (label_data_loader, unlabel_data_loader),
+            (batch_size_label, batch_size_unlabel),
+        )
     else:
         raise NotImplementedError("ASPECT_RATIO_GROUPING = False is not supported yet")

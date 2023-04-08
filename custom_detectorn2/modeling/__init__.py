@@ -1,5 +1,7 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
-from custom_detectorn2.modeling.backbone.fpn import build_fcos_resnet_fpn_backbone  # noqa
+from custom_detectorn2.modeling.backbone.fpn import (
+    build_fcos_resnet_fpn_backbone,
+)  # noqa
 from custom_detectorn2.modeling.meta_arch.ts_ensemble import EnsembleTSModel  # noqa
 
 from .fcos import FCOS  # noqa

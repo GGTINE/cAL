@@ -23,20 +23,35 @@ class PseudoGenerator:
         if "reg_pred_std" in raw_output:
             reg_pred_std = raw_output["reg_pred_std"]
 
-        results = self.fcos_output.predict_proposals(logits_pred, reg_pred, ctrness_pred, locations, image_sizes, reg_pred_std, top_feats, nms_method)
+        results = self.fcos_output.predict_proposals(
+            logits_pred,
+            reg_pred,
+            ctrness_pred,
+            locations,
+            image_sizes,
+            reg_pred_std,
+            top_feats,
+            nms_method,
+        )
 
         return results
 
     # generate
-    def process_pseudo_label(self, proposals_rpn_unsup_k, cur_threshold, proposal_type, psedo_label_method=""):
+    def process_pseudo_label(
+        self, proposals_rpn_unsup_k, cur_threshold, proposal_type, psedo_label_method=""
+    ):
         list_instances = []
         num_proposal_output = 0.0
         for proposal_bbox_inst in proposals_rpn_unsup_k:
             # thresholding
             if psedo_label_method == "thresholding":
-                proposal_bbox_inst = self.threshold_bbox(proposal_bbox_inst, thres=cur_threshold, proposal_type=proposal_type)
+                proposal_bbox_inst = self.threshold_bbox(
+                    proposal_bbox_inst, thres=cur_threshold, proposal_type=proposal_type
+                )
             elif psedo_label_method == "thresholding_cls_ctr":
-                proposal_bbox_inst = self.threshold_cls_ctr_bbox(proposal_bbox_inst, thres=cur_threshold)
+                proposal_bbox_inst = self.threshold_cls_ctr_bbox(
+                    proposal_bbox_inst, thres=cur_threshold
+                )
             else:
                 raise ValueError("Unkown pseudo label boxes methods")
             num_proposal_output += len(proposal_bbox_inst)
@@ -63,7 +78,9 @@ class PseudoGenerator:
 
             # add boxes to instances
             new_proposal_inst.gt_boxes = new_boxes
-            new_proposal_inst.objectness_logits = proposal_bbox_inst.objectness_logits[valid_map]
+            new_proposal_inst.objectness_logits = proposal_bbox_inst.objectness_logits[
+                valid_map
+            ]
 
         elif proposal_type == "roih":
             valid_map = proposal_bbox_inst.scores > thres
@@ -82,7 +99,9 @@ class PseudoGenerator:
             new_proposal_inst.centerness = proposal_bbox_inst.centerness[valid_map]
             new_proposal_inst.cls_confid = proposal_bbox_inst.cls_confid[valid_map]
             if proposal_bbox_inst.has("reg_pred_std"):
-                new_proposal_inst.reg_pred_std = proposal_bbox_inst.reg_pred_std[valid_map]
+                new_proposal_inst.reg_pred_std = proposal_bbox_inst.reg_pred_std[
+                    valid_map
+                ]
 
         return new_proposal_inst
 

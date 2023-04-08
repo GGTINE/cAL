@@ -1,6 +1,3 @@
-import copy
-
-
 def remove_label(label_data):
     for label_datum in label_data:
         if "instances" in label_datum.keys():
@@ -17,13 +14,3 @@ def add_label(unlabled_data, label, labeltype=""):
         else:
             unlabel_datum["instances"] = lab_inst
     return unlabled_data
-
-
-def change_label(data):
-    for i in data:
-        if "instances" in i.keys():
-            copy_instance = copy.deepcopy(i["instances"])
-            del i["instances"]
-            i["instances_class"] = copy_instance
-            i["instances_reg"] = copy_instance
-    return data

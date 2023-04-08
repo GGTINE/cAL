@@ -15,7 +15,10 @@ def detector_postprocess(results, output_height, output_width, mask_threshold=0.
     In addition to the post processing of detectron2, we add scalign for
     bezier control points.
     """
-    scale_x, scale_y = (output_width / results.image_size[1], output_height / results.image_size[0])
+    scale_x, scale_y = (
+        output_width / results.image_size[1],
+        output_height / results.image_size[0],
+    )
     results = d2_postprocesss(results, output_height, output_width, mask_threshold)
 
     # scale bezier points
@@ -42,27 +45,35 @@ class OneStageDetector(nn.Module):
     def __init__(self, cfg):
         super().__init__()
         self.backbone = build_backbone(cfg)
-        self.proposal_generator = build_proposal_generator(cfg, self.backbone.output_shape())
-        self.register_buffer("pixel_mean", torch.Tensor(cfg.MODEL.PIXEL_MEAN).view(-1, 1, 1))
-        self.register_buffer("pixel_std", torch.Tensor(cfg.MODEL.PIXEL_STD).view(-1, 1, 1))
+        self.proposal_generator = build_proposal_generator(
+            cfg, self.backbone.output_shape()
+        )
+        self.register_buffer(
+            "pixel_mean", torch.Tensor(cfg.MODEL.PIXEL_MEAN).view(-1, 1, 1)
+        )
+        self.register_buffer(
+            "pixel_std", torch.Tensor(cfg.MODEL.PIXEL_STD).view(-1, 1, 1)
+        )
 
     @property
     def device(self):
         return self.pixel_mean.device
 
-    def forward(self, batched_inputs, output_raw=False, nms_method="cls_n_ctr", ignore_near=False, branch="labeled"):
+    def forward(
+        self,
+        batched_inputs,
+        output_raw=False,
+        nms_method="cls_n_ctr",
+        ignore_near=False,
+        branch="labeled",
+    ):
         images = [x["image"].to(self.device) for x in batched_inputs]
         images = [(x - self.pixel_mean) / self.pixel_std for x in images]
         images = ImageList.from_tensors(images, self.backbone.size_divisibility)
         features = self.backbone(images.tensor)
 
         # pseudo-labels for classification and regression
-        if "instances_class" in batched_inputs[0] and "instances_reg" in batched_inputs[0]:
-            gt_instances_cls = [x["instances_class"].to(self.device) for x in batched_inputs]
-            gt_instances_reg = [x["instances_reg"].to(self.device) for x in batched_inputs]
-            gt_instances = {"cls": gt_instances_cls, "reg": gt_instances_reg}
-
-        elif "instances" in batched_inputs[0] and branch != "teacher_weak":
+        if "instances" in batched_inputs[0] and branch != "teacher_weak":
             gt_instances = [x["instances"].to(self.device) for x in batched_inputs]
 
         else:
@@ -71,30 +82,62 @@ class OneStageDetector(nn.Module):
         # training
         if self.training:
             if output_raw:
-                proposal_losses, raw_pred = self.proposal_generator(images, features, gt_instances, output_raw=True,
-                                                                    nms_method=nms_method, ignore_near=ignore_near, branch=branch)
+                proposal_losses, raw_pred = self.proposal_generator(
+                    images,
+                    features,
+                    gt_instances,
+                    output_raw=True,
+                    nms_method=nms_method,
+                    ignore_near=ignore_near,
+                    branch=branch,
+                )
                 return proposal_losses, raw_pred
             else:
-                proposal_losses = self.proposal_generator(images, features, gt_instances, output_raw=False,
-                                                          nms_method=nms_method, ignore_near=ignore_near, branch=branch)
+                proposal_losses = self.proposal_generator(
+                    images,
+                    features,
+                    gt_instances,
+                    output_raw=False,
+                    nms_method=nms_method,
+                    ignore_near=ignore_near,
+                    branch=branch,
+                )
                 return proposal_losses
         # inference
         else:
             if output_raw:
-                proposals, raw_pred = self.proposal_generator(images, features, gt_instances, output_raw=True, nms_method=nms_method,
-                                                              ignore_near=ignore_near, branch=branch)
+                proposals, raw_pred = self.proposal_generator(
+                    images,
+                    features,
+                    gt_instances,
+                    output_raw=True,
+                    nms_method=nms_method,
+                    ignore_near=ignore_near,
+                    branch=branch,
+                )
                 return proposals, raw_pred
             else:
-                proposals = self.proposal_generator(images, features, gt_instances, output_raw=False, nms_method=nms_method,
-                                                    ignore_near=ignore_near, branch=branch)
+                proposals = self.proposal_generator(
+                    images,
+                    features,
+                    gt_instances,
+                    output_raw=False,
+                    nms_method=nms_method,
+                    ignore_near=ignore_near,
+                    branch=branch,
+                )
                 processed_results = []
-                for results_per_image, input_per_image, image_size in zip(proposals, batched_inputs, images.image_sizes):
+                for results_per_image, input_per_image, image_size in zip(
+                    proposals, batched_inputs, images.image_sizes
+                ):
                     height = input_per_image.get("height", image_size[0])
                     width = input_per_image.get("width", image_size[1])
                     r = detector_postprocess(results_per_image, height, width)
                     processed_results.append({"proposals": r})
 
-                processed_results = [{"instances": r["proposals"]} for r in processed_results]
+                processed_results = [
+                    {"instances": r["proposals"]} for r in processed_results
+                ]
                 return processed_results
 
     def visualize_training(self, batched_inputs, proposals, branch):

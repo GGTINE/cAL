@@ -12,8 +12,11 @@ class DetectionTSCheckpointer(DetectionCheckpointer):
             if checkpoint.get("matching_heuristics", False):
                 self._convert_ndarray_to_tensor(checkpoint["model"])
                 # convert weights by name-matching heuristics
-                checkpoint["model"] = align_and_update_state_dicts(self.model.modelStudent.state_dict(), checkpoint["model"],
-                                                                   c2_conversion=checkpoint.get("__author__", None) == "Caffe2")
+                checkpoint["model"] = align_and_update_state_dicts(
+                    self.model.modelStudent.state_dict(),
+                    checkpoint["model"],
+                    c2_conversion=checkpoint.get("__author__", None) == "Caffe2",
+                )
 
             # for non-caffe2 models, use standard ways to load it
             incompatible = self._load_student_model(checkpoint)
@@ -34,8 +37,11 @@ class DetectionTSCheckpointer(DetectionCheckpointer):
             if checkpoint.get("matching_heuristics", False):
                 self._convert_ndarray_to_tensor(checkpoint["model"])
                 # convert weights by name-matching heuristics
-                checkpoint["model"] = align_and_update_state_dicts(self.model.state_dict(), checkpoint["model"],
-                                                                   c2_conversion=checkpoint.get("__author__", None) == "Caffe2")
+                checkpoint["model"] = align_and_update_state_dicts(
+                    self.model.state_dict(),
+                    checkpoint["model"],
+                    c2_conversion=checkpoint.get("__author__", None) == "Caffe2",
+                )
             # for non-caffe2 models, use standard ways to load it
             incompatible = super()._load_model(checkpoint)
 
@@ -71,6 +77,11 @@ class DetectionTSCheckpointer(DetectionCheckpointer):
                     incorrect_shapes.append((k, shape_checkpoint, shape_model))
                     checkpoint_state_dict.pop(k)
         # pyre-ignore
-        incompatible = self.model.modelStudent.load_state_dict(checkpoint_state_dict, strict=False)
-        return _IncompatibleKeys(missing_keys=incompatible.missing_keys, unexpected_keys=incompatible.unexpected_keys,
-                                 incorrect_shapes=incorrect_shapes)
+        incompatible = self.model.modelStudent.load_state_dict(
+            checkpoint_state_dict, strict=False
+        )
+        return _IncompatibleKeys(
+            missing_keys=incompatible.missing_keys,
+            unexpected_keys=incompatible.unexpected_keys,
+            incorrect_shapes=incorrect_shapes,
+        )

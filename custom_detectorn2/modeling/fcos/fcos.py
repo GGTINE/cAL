@@ -48,6 +48,7 @@ class FCOS(nn.Module):
         self.in_features = cfg.MODEL.FCOS.IN_FEATURES
         self.fpn_strides = cfg.MODEL.FCOS.FPN_STRIDES
         self.yield_proposal = cfg.MODEL.FCOS.YIELD_PROPOSAL
+        # self.yield_box_feats = cfg.MODEL.FCOS.YIELD_BOX_FEATURES
 
         self.kl_loss = cfg.MODEL.FCOS.KL_LOSS
         self.kl_loss_type = cfg.MODEL.FCOS.KL_LOSS_TYPE
@@ -59,18 +60,39 @@ class FCOS(nn.Module):
 
     def forward_head(self, features, top_module=None):
         features = [features[f] for f in self.in_features]
-
         if self.kl_loss:
-            (pred_class_logits, pred_deltas, reg_pred, pred_centerness, top_feats, bbox_towers) = \
-                self.fcos_head(features, top_module, self.yield_proposal)
+            (
+                pred_class_logits,
+                pred_deltas,
+                reg_pred,
+                pred_centerness,
+                top_feats,
+                bbox_towers,
+            ) = self.fcos_head(features, top_module, self.yield_proposal)
+
+            return pred_class_logits, pred_deltas, reg_pred, pred_centerness, top_feats, bbox_towers
         else:
-            (pred_class_logits, pred_deltas, pred_centerness, top_feats, bbox_towers) = \
-                self.fcos_head(features, top_module, self.yield_proposal)
+            (
+                pred_class_logits,
+                pred_deltas,
+                pred_centerness,
+                top_feats,
+                bbox_towers,
+            ) = self.fcos_head(features, top_module, self.yield_proposal)
 
-        return pred_class_logits, pred_deltas, pred_centerness, top_feats, bbox_towers
+            return pred_class_logits, pred_deltas, pred_centerness, top_feats, bbox_towers
 
-    def forward(self, images, features, gt_instances=None, top_module=None, output_raw=False, nms_method="cls_n_ctr",
-                ignore_near=False, branch="labeled"):
+    def forward(
+        self,
+        images,
+        features,
+        gt_instances=None,
+        top_module=None,
+        output_raw=False,
+        nms_method="cls_n_ctr",
+        ignore_near=False,
+        branch="labeled",
+    ):
         """
         Returns:
             결과 (list[BoxList] or dict[Tensor]): 모델로 부터 출력이 return됨
@@ -84,7 +106,14 @@ class FCOS(nn.Module):
         raw_output = {}
 
         if self.kl_loss:
-            logits_pred, reg_pred, reg_pred_std, ctrness_pred, top_feats, bbox_towers = self.fcos_head(features, top_module, self.yield_proposal)
+            (
+                logits_pred,
+                reg_pred,
+                reg_pred_std,
+                ctrness_pred,
+                top_feats,
+                bbox_towers,
+            ) = self.fcos_head(features, top_module, self.yield_proposal)
             raw_output["reg_pred_std"] = reg_pred_std
             raw_output["logits_pred"] = logits_pred
             raw_output["reg_pred"] = reg_pred
@@ -95,27 +124,41 @@ class FCOS(nn.Module):
             raw_output["image_sizes"] = images.image_sizes
 
         else:
-            logits_pred, reg_pred, ctrness_pred, top_feats, bbox_towers = self.fcos_head(features, top_module, self.yield_proposal)
+            (
+                logits_pred,
+                reg_pred,
+                ctrness_pred,
+                top_feats,
+                bbox_towers,
+            ) = self.fcos_head(features, top_module, self.yield_proposal)
             reg_pred_std = None
 
         if self.training:
-            if branch == "labeled":
-                losses = self.fcos_outputs.losses(
-                    logits_pred, reg_pred, ctrness_pred, locations, gt_instances, reg_pred_std, top_feats, ignore_near)
-            elif branch == "unlabeled":
-                losses = self.fcos_outputs.pseudo_losses(
-                    logits_pred, reg_pred, ctrness_pred, locations, gt_instances, reg_pred_std, top_feats, ignore_near)
-            else:
-                raise ValueError("Unknown branch")
+            losses = self.fcos_outputs.losses(
+                logits_pred,
+                reg_pred,
+                ctrness_pred,
+                locations,
+                gt_instances,
+                reg_pred_std,
+                top_feats,
+                ignore_near,
+                branch=branch
+            )
 
-            if output_raw:
-                return losses, raw_output
-            else:
-                return losses
+            return losses
 
         else:
-            results = self.fcos_outputs.predict_proposals(logits_pred, reg_pred, ctrness_pred, locations, images.image_sizes, reg_pred_std,
-                                                          top_feats, nms_method)
+            results = self.fcos_outputs.predict_proposals(
+                logits_pred,
+                reg_pred,
+                ctrness_pred,
+                locations,
+                images.image_sizes,
+                reg_pred_std,
+                top_feats,
+                nms_method,
+            )
             if output_raw:
                 return results, raw_output
             else:
@@ -125,7 +168,9 @@ class FCOS(nn.Module):
         locations = []
         for level, feature in enumerate(features):
             h, w = feature.size()[-2:]
-            locations_per_level = compute_locations(h, w, self.fpn_strides[level], feature.device)
+            locations_per_level = compute_locations(
+                h, w, self.fpn_strides[level], feature.device
+            )
             locations.append(locations_per_level)
         return locations
 
@@ -147,7 +192,7 @@ class FCOSHead(nn.Module):
         head_configs = {
             "cls": (cfg.MODEL.FCOS.NUM_CLS_CONVS, cfg.MODEL.FCOS.USE_DEFORMABLE),
             "bbox": (cfg.MODEL.FCOS.NUM_BOX_CONVS, cfg.MODEL.FCOS.USE_DEFORMABLE),
-            "share": (cfg.MODEL.FCOS.NUM_SHARE_CONVS, False)
+            "share": (cfg.MODEL.FCOS.NUM_SHARE_CONVS, False),
         }
         norm = None if cfg.MODEL.FCOS.NORM == "none" else cfg.MODEL.FCOS.NORM
         self.num_levels = len(input_shape)
@@ -163,42 +208,84 @@ class FCOSHead(nn.Module):
             num_convs, use_deformable = head_configs[head]
             for _ in range(num_convs):
                 conv_func = nn.Conv2d
-                tower.append(conv_func(in_channels, in_channels, kernel_size=3, stride=1, padding=1, bias=True))
+                tower.append(
+                    conv_func(
+                        in_channels,
+                        in_channels,
+                        kernel_size=3,
+                        stride=1,
+                        padding=1,
+                        bias=True,
+                    )
+                )
                 if norm == "GN":
                     tower.append(nn.GroupNorm(32, in_channels))
                 elif norm == "BN":
-                    tower.append(ModuleListDial([nn.BatchNorm2d(in_channels) for _ in range(self.num_levels)]))
+                    tower.append(
+                        ModuleListDial(
+                            [
+                                nn.BatchNorm2d(in_channels)
+                                for _ in range(self.num_levels)
+                            ]
+                        )
+                    )
                 elif norm == "SyncBN":
-                    tower.append(ModuleListDial([NaiveSyncBatchNorm(in_channels) for _ in range(self.num_levels)]))
+                    tower.append(
+                        ModuleListDial(
+                            [
+                                NaiveSyncBatchNorm(in_channels)
+                                for _ in range(self.num_levels)
+                            ]
+                        )
+                    )
                 tower.append(nn.ReLU())
             self.add_module("{}_tower".format(head), nn.Sequential(*tower))
 
-        self.cls_logits = nn.Conv2d(in_channels, self.num_classes, kernel_size=3, stride=1, padding=1)
+        self.cls_logits = nn.Conv2d(
+            in_channels, self.num_classes, kernel_size=3, stride=1, padding=1
+        )
 
         if self.reg_discrete:
-            self.bbox_pred = nn.Conv2d(in_channels, 4 * (self.reg_max + 1), kernel_size=3, stride=1, padding=1)
+            self.bbox_pred = nn.Conv2d(
+                in_channels, 4 * (self.reg_max + 1), kernel_size=3, stride=1, padding=1
+            )
         else:
-            self.bbox_pred = nn.Conv2d(in_channels, 4, kernel_size=3, stride=1, padding=1)
+            self.bbox_pred = nn.Conv2d(
+                in_channels, 4, kernel_size=3, stride=1, padding=1
+            )
 
         if self.kl_loss:
-            self.bbox_pred_std = nn.Conv2d(in_channels, 4, kernel_size=3, stride=1, padding=1)
+            self.bbox_pred_std = nn.Conv2d(
+                in_channels, 4, kernel_size=3, stride=1, padding=1
+            )
 
         self.ctrness = nn.Conv2d(in_channels, 1, kernel_size=3, stride=1, padding=1)
 
         if cfg.MODEL.FCOS.USE_SCALE:  # learnable scale
-            self.scales = nn.ModuleList([Scale(init_value=1.0) for _ in range(self.num_levels)])
+            self.scales = nn.ModuleList(
+                [Scale(init_value=1.0) for _ in range(self.num_levels)]
+            )
         else:
             self.scales = None
 
         # initialize
-        for modules in [self.cls_tower, self.bbox_tower, self.share_tower, self.cls_logits, self.bbox_pred, self.ctrness]:
+        for modules in [
+            self.cls_tower,
+            self.bbox_tower,
+            self.share_tower,
+            self.cls_logits,
+            self.bbox_pred,
+            self.ctrness,
+        ]:
             for lay in modules.modules():
                 if isinstance(lay, nn.Conv2d):
                     torch.nn.init.normal_(lay.weight, std=0.01)
                     torch.nn.init.constant_(lay.bias, 0)
 
         if self.kl_loss:
-            torch.nn.init.normal_(self.bbox_pred_std.weight, std=0.0001)  # follows KL-Loss
+            torch.nn.init.normal_(
+                self.bbox_pred_std.weight, std=0.0001
+            )  # follows KL-Loss
             torch.nn.init.constant_(self.bbox_pred_std.bias, 0)  # follows KL-Loss
 
         # initialize the bias for focal loss

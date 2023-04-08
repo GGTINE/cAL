@@ -67,6 +67,12 @@ def build_fcos_resnet_fpn_backbone(cfg, input_shape: ShapeSpec):
         top_block = LastLevelP6(in_channels_top, out_channels, "p5")
     elif top_levels == 0:
         top_block = None
-    backbone = FPN(bottom_up=bottom_up, in_features=in_features, out_channels=out_channels, norm=cfg.MODEL.FPN.NORM, top_block=top_block,
-                   fuse_type=cfg.MODEL.FPN.FUSE_TYPE)
+    backbone = FPN(
+        bottom_up=bottom_up,
+        in_features=in_features,
+        out_channels=out_channels,
+        norm=cfg.MODEL.FPN.NORM,
+        top_block=top_block,
+        fuse_type=cfg.MODEL.FPN.FUSE_TYPE,
+    )
     return backbone

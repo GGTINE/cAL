@@ -137,9 +137,14 @@ class AspectRatioGroupedSemiSupDatasetTwoCrop(AspectRatioGroupedDataset):
                 unlabel_buckets_key.append(d_unlabel[1])
 
             # yield the batch of data until all buckets are full
-            if len(label_bucket) == self.batch_size_label and len(unlabel_bucket) == self.batch_size_unlabel:
+            if (
+                len(label_bucket) == self.batch_size_label
+                and len(unlabel_bucket) == self.batch_size_unlabel
+            ):
                 # label_strong, label_weak, unlabed_strong, unlabled_weak
-                yield label_bucket[:], label_buckets_key[:], unlabel_bucket[:], unlabel_buckets_key[:]
+                yield label_bucket[:], label_buckets_key[:], unlabel_bucket[
+                    :
+                ], unlabel_buckets_key[:]
                 del label_bucket[:]
                 del label_buckets_key[:]
                 del unlabel_bucket[:]

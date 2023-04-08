@@ -54,7 +54,9 @@ def add_ubteacher_config(cfg):
     # supervision level
     _C.DATALOADER.SUP_PERCENT = 100.0  # 5 = 5% dataset as labeled set
     _C.DATALOADER.RANDOM_DATA_SEED = 0  # random seed to read data
-    fb_path = "manifold://mobile_vision_dataset/tree/unbiased_teacher/COCO_supervision.txt"
+    fb_path = (
+        "manifold://mobile_vision_dataset/tree/unbiased_teacher/COCO_supervision.txt"
+    )
     local_path = "dataseed/COCO_supervision.txt"
     if os.path.isfile(local_path):
         _C.DATALOADER.RANDOM_DATA_SEED_PATH = local_path
@@ -127,7 +129,7 @@ def add_ubteacher_config(cfg):
     _C.MODEL.FCOS.POST_NMS_TOPK_TRAIN = 100
     _C.MODEL.FCOS.POST_NMS_TOPK_TEST = 100
     _C.MODEL.FCOS.TOP_LEVELS = 2
-    _C.MODEL.FCOS.NORM = "BN"  # Support GN or none
+    _C.MODEL.FCOS.NORM = "GN"  # Support GN or none
     _C.MODEL.FCOS.USE_SCALE = True
 
     # Multiply centerness before threshold
@@ -150,7 +152,8 @@ def add_ubteacher_config(cfg):
     _C.MODEL.FCOS.LOC_LOSS_TYPE = "giou"
     _C.MODEL.FCOS.YIELD_PROPOSAL = False
 
-    _C.MODEL.FCOS.NMS_CRITERIA_TRAIN = "cls"
+    # _C.MODEL.FCOS.NMS_CRITERIA_TRAIN = "cls"
+    _C.MODEL.FCOS.NMS_CRITERIA_TRAIN = "cls_n_ctr"
     _C.MODEL.FCOS.NMS_CRITERIA_TEST = "cls_n_ctr"
     _C.MODEL.FCOS.NMS_CRITERIA_REG_TRAIN = "cls_n_loc"
 

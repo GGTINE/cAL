@@ -68,8 +68,12 @@ class NaiveGroupNorm(Module):
         input = (input - mean) / std
         input = input.reshape(N, C, H, W)
         if self.affine:
-            input = input * self.weight.reshape(1, C, 1, 1) + self.bias.reshape(1, C, 1, 1)
+            input = input * self.weight.reshape(1, C, 1, 1) + self.bias.reshape(
+                1, C, 1, 1
+            )
         return input
 
     def extra_repr(self):
-        return "{num_groups}, {num_channels}, eps={eps}, " "affine={affine}".format(**self.__dict__)
+        return "{num_groups}, {num_channels}, eps={eps}, " "affine={affine}".format(
+            **self.__dict__
+        )

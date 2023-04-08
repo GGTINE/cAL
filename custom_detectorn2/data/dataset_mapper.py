@@ -29,7 +29,9 @@ class DatasetMapperTwoCropSeparate(DatasetMapper):
 
         # include crop into self.augmentation
         if cfg.INPUT.CROP.ENABLED and is_train:
-            self.augmentation.insert(0, T.RandomCrop(cfg.INPUT.CROP.TYPE, cfg.INPUT.CROP.SIZE))
+            self.augmentation.insert(
+                0, T.RandomCrop(cfg.INPUT.CROP.TYPE, cfg.INPUT.CROP.SIZE)
+            )
             self.compute_tight_boxes = True
         else:
             self.compute_tight_boxes = False
@@ -44,13 +46,19 @@ class DatasetMapperTwoCropSeparate(DatasetMapper):
 
         # fmt: on
         if self.keypoint_on and is_train:
-            self.keypoint_hflip_indices = utils.create_keypoint_hflip_indices(cfg.DATASETS.TRAIN)
+            self.keypoint_hflip_indices = utils.create_keypoint_hflip_indices(
+                cfg.DATASETS.TRAIN
+            )
         else:
             self.keypoint_hflip_indices = None
 
         if self.load_proposals:
             self.proposal_min_box_size = cfg.MODEL.PROPOSAL_GENERATOR.MIN_SIZE
-            self.proposal_topk = (cfg.DATASETS.PRECOMPUTED_PROPOSAL_TOPK_TRAIN if is_train else cfg.DATASETS.PRECOMPUTED_PROPOSAL_TOPK_TEST)
+            self.proposal_topk = (
+                cfg.DATASETS.PRECOMPUTED_PROPOSAL_TOPK_TRAIN
+                if is_train
+                else cfg.DATASETS.PRECOMPUTED_PROPOSAL_TOPK_TEST
+            )
         self.is_train = is_train
 
     def __call__(self, dataset_dict):
@@ -66,7 +74,9 @@ class DatasetMapperTwoCropSeparate(DatasetMapper):
         utils.check_image_size(dataset_dict, image)
 
         if "sem_seg_file_name" in dataset_dict:
-            sem_seg_gt = utils.read_image(dataset_dict.pop("sem_seg_file_name"), "L").squeeze(2)
+            sem_seg_gt = utils.read_image(
+                dataset_dict.pop("sem_seg_file_name"), "L"
+            ).squeeze(2)
         else:
             sem_seg_gt = None
 
@@ -79,8 +89,13 @@ class DatasetMapperTwoCropSeparate(DatasetMapper):
             dataset_dict["sem_seg"] = torch.as_tensor(sem_seg_gt.astype("long"))
 
         if self.load_proposals:
-            utils.transform_proposals(dataset_dict, image_shape, transforms,
-                                      proposal_topk=self.proposal_topk, min_box_size=self.proposal_min_box_size)
+            utils.transform_proposals(
+                dataset_dict,
+                image_shape,
+                transforms,
+                proposal_topk=self.proposal_topk,
+                min_box_size=self.proposal_min_box_size,
+            )
 
         if not self.is_train:
             dataset_dict.pop("annotations", None)
@@ -94,9 +109,19 @@ class DatasetMapperTwoCropSeparate(DatasetMapper):
                 if not self.keypoint_on:
                     anno.pop("keypoints", None)
 
-            annos = [utils.transform_instance_annotations(obj, transforms, image_shape, keypoint_hflip_indices=self.keypoint_hflip_indices)
-                     for obj in dataset_dict.pop("annotations") if obj.get("iscrowd", 0) == 0]
-            instances = utils.annotations_to_instances(annos, image_shape, mask_format=self.mask_format)
+            annos = [
+                utils.transform_instance_annotations(
+                    obj,
+                    transforms,
+                    image_shape,
+                    keypoint_hflip_indices=self.keypoint_hflip_indices,
+                )
+                for obj in dataset_dict.pop("annotations")
+                if obj.get("iscrowd", 0) == 0
+            ]
+            instances = utils.annotations_to_instances(
+                annos, image_shape, mask_format=self.mask_format
+            )
 
             if self.compute_tight_boxes and instances.has("gt_masks"):
                 instances.gt_boxes = instances.gt_masks.get_bounding_boxes()
@@ -110,10 +135,14 @@ class DatasetMapperTwoCropSeparate(DatasetMapper):
         # convert to PIL format first.
         image_pil = Image.fromarray(image_weak_aug.astype("uint8"), "RGB")
         image_strong_aug = np.array(self.strong_augmentation(image_pil))
-        dataset_dict["image"] = torch.as_tensor(np.ascontiguousarray(image_strong_aug.transpose((2, 0, 1))))
+        dataset_dict["image"] = torch.as_tensor(
+            np.ascontiguousarray(image_strong_aug.transpose((2, 0, 1)))
+        )
 
         dataset_dict_key = copy.deepcopy(dataset_dict)
-        dataset_dict_key["image"] = torch.as_tensor(np.ascontiguousarray(image_weak_aug.transpose((2, 0, 1))))
+        dataset_dict_key["image"] = torch.as_tensor(
+            np.ascontiguousarray(image_weak_aug.transpose((2, 0, 1)))
+        )
         assert dataset_dict["image"].size(1) == dataset_dict_key["image"].size(1)
         assert dataset_dict["image"].size(2) == dataset_dict_key["image"].size(2)
 

@@ -19,7 +19,9 @@ def quality_focal_loss(pred, target, beta=2.0, use_sigmoid=True):
     Returns:
         torch.Tensor: Loss tensor with shape (N,).
     """
-    assert (len(target) == 2), """target for QFL must be a tuple of two elements, including category label and quality label, respectively"""
+    assert (
+        len(target) == 2
+    ), """target for QFL must be a tuple of two elements, including category label and quality label, respectively"""
     # label denotes the category id, score denotes the quality score
     label, score = target
     if use_sigmoid:
@@ -39,7 +41,9 @@ def quality_focal_loss(pred, target, beta=2.0, use_sigmoid=True):
     pos_label = label[pos].long()
     # positives are supervised by bbox quality (IoU) score
     scale_factor = score[pos] - pred_sigmoid[pos, pos_label]
-    loss[pos, pos_label] = func(pred[pos, pos_label], score[pos], reduction="none") * scale_factor.abs().pow(beta)
+    loss[pos, pos_label] = func(
+        pred[pos, pos_label], score[pos], reduction="none"
+    ) * scale_factor.abs().pow(beta)
 
     # loss = loss.sum(dim=1, keepdim=False)
     return loss
