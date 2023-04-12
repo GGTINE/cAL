@@ -75,34 +75,24 @@ class OneStageDetector(nn.Module):
         # pseudo-labels for classification and regression
         if "instances" in batched_inputs[0] and branch != "teacher_weak":
             gt_instances = [x["instances"].to(self.device) for x in batched_inputs]
-
+        elif "instances_class" in batched_inputs[0] and "instances_reg" in batched_inputs[0]:
+            gt_cls = [x["instances_class"].to(self.device) for x in batched_inputs]
+            gt_reg = [x["instances_reg"].to(self.device) for x in batched_inputs]
+            gt_instances = {"cls": gt_cls, "reg": gt_reg}
         else:
             gt_instances = None
 
         # training
         if self.training:
-            if output_raw:
-                proposal_losses, raw_pred = self.proposal_generator(
-                    images,
-                    features,
-                    gt_instances,
-                    output_raw=True,
-                    nms_method=nms_method,
-                    ignore_near=ignore_near,
-                    branch=branch,
-                )
-                return proposal_losses, raw_pred
-            else:
-                proposal_losses = self.proposal_generator(
-                    images,
-                    features,
-                    gt_instances,
-                    output_raw=False,
-                    nms_method=nms_method,
-                    ignore_near=ignore_near,
-                    branch=branch,
-                )
-                return proposal_losses
+            proposal_losses = self.proposal_generator(
+                images,
+                features,
+                gt_instances,
+                nms_method=nms_method,
+                ignore_near=ignore_near,
+                branch=branch,
+            )
+            return proposal_losses
         # inference
         else:
             if output_raw:
@@ -139,84 +129,3 @@ class OneStageDetector(nn.Module):
                     {"instances": r["proposals"]} for r in processed_results
                 ]
                 return processed_results
-
-    def visualize_training(self, batched_inputs, proposals, branch):
-        """
-        A function used to visualize images and proposals. It shows ground truth
-        bounding boxes on the original image and up to 20 top-scoring predicted
-        object proposals on the original image. Users can implement different
-        visualization functions for different models.
-
-        Args:
-            batched_inputs (list): a list that contains input to the model.
-            proposals (list): a list that contains predicted proposals. Both
-                batched_inputs and proposals should have the same length.
-        """
-        from detectron2.utils.visualizer import Visualizer
-
-        storage = get_event_storage()
-        max_vis_prop = 20
-
-        for input, prop in zip(batched_inputs, proposals):
-            if branch == "labeled":
-                img = input["image"]
-                img = convert_image_to_rgb(img.permute(1, 2, 0), "BGR")
-                v_gt = Visualizer(img, None)
-                v_gt = v_gt.overlay_instances(
-                    boxes=input["instances"].gt_boxes.to("cpu")
-                )
-                anno_img = v_gt.get_image()
-                box_size = min(len(prop.pred_boxes), max_vis_prop)
-                v_pred = Visualizer(img, None)
-                v_pred = v_pred.overlay_instances(
-                    boxes=prop.pred_boxes[0:box_size].tensor.cpu().numpy()
-                )
-                prop_img = v_pred.get_image()
-                vis_img = np.concatenate((anno_img, prop_img), axis=1)
-                vis_img = vis_img.transpose(2, 0, 1)
-                vis_name = (
-                    branch
-                    + " | Left: GT bounding boxes;      Right: Predicted proposals"
-                )
-            elif branch == "unlabeled":
-                img_list = []
-                img = input["image"]
-                img = convert_image_to_rgb(img.permute(1, 2, 0), "BGR")
-
-                # classification pseudo-set
-                if "instances_class" in input:
-                    v_gt = Visualizer(img, None)
-                    v_gt = v_gt.overlay_instances(
-                        boxes=input["instances_class"].gt_boxes.to("cpu")
-                    )
-                    anno_img = v_gt.get_image()
-                    img_list.append(anno_img)
-
-                # regression pseudo-set
-                if "instances_reg" in input:
-                    v_gt2 = Visualizer(img, None)
-                    v_gt2 = v_gt2.overlay_instances(
-                        boxes=input["instances_reg"].gt_boxes.to("cpu")
-                    )
-                    anno_reg_img = v_gt2.get_image()
-                    img_list.append(anno_reg_img)
-
-                box_size = min(len(prop.pred_boxes), max_vis_prop)
-                v_pred = Visualizer(img, None)
-                v_pred = v_pred.overlay_instances(
-                    boxes=prop.pred_boxes[0:box_size].tensor.cpu().numpy()
-                )
-                prop_img = v_pred.get_image()
-                img_list.append(prop_img)
-
-                vis_img = np.concatenate(tuple(img_list), axis=1)
-                vis_img = vis_img.transpose(2, 0, 1)
-
-                vis_name = (
-                    branch
-                    + " | Left: Pseudo-Cls; Center: Pseudo-Reg; Right: Predicted proposals"
-                )
-            else:
-                break
-            storage.put_image(vis_name, vis_img)
-            break  # only visualize one image in a batch

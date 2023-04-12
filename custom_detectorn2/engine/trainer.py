@@ -34,6 +34,7 @@ from custom_detectorn2.modeling.meta_arch.ts_ensemble import EnsembleTSModel
 from custom_detectorn2.modeling.pseudo_generator import PseudoGenerator
 from custom_detectorn2.solver.build import build_lr_scheduler
 from custom_detectorn2.evaluation.evaluator import inference_on_dataset
+from custom_detectorn2.utils.visual import visual_img
 
 
 class ActiveTrainer(DefaultTrainer):
@@ -45,7 +46,7 @@ class ActiveTrainer(DefaultTrainer):
         with matching heuristics.
         """
         cfg = DefaultTrainer.auto_scale_workers(cfg, comm.get_world_size())
-        self.accumulation = 2
+        self.accumulation = 4
         self.accumulate_steps = 0
 
         # Student 모델 생성
@@ -163,11 +164,11 @@ class ActiveTrainer(DefaultTrainer):
             if self.iter == self.cfg.SEMISUPNET.BURN_UP_STEP:
                 self._update_teacher_model(keep_rate=0.00)
 
-                unlabel_data_q = remove_label(unlabel_data_q)
-                unlabel_data_k = remove_label(unlabel_data_k)
+            unlabel_data_q = remove_label(unlabel_data_q)
+            unlabel_data_k = remove_label(unlabel_data_k)
 
             with torch.no_grad():
-                pred_teacher, raw_pred_teacher = self.model_teacher(
+                pred_teacher, raw_pred = self.model_teacher(
                     unlabel_data_k,
                     output_raw=True,
                     nms_method=self.cfg.MODEL.FCOS.NMS_CRITERIA_TRAIN,
@@ -177,10 +178,10 @@ class ActiveTrainer(DefaultTrainer):
             self.create_pseudo_label(
                 unlabel_data=unlabel_data_q,
                 pred_teacher=pred_teacher,
-                raw_pred_teacher=raw_pred_teacher,
+                raw_pred_teacher=raw_pred,
                 nms_method=self.cfg.MODEL.FCOS.NMS_CRITERIA_REG_TRAIN,
             )
-
+            # visual_img(unlabel_data_q)
             with autocast(self.cfg.SOLVER.AMP.ENABLED):
                 record_dict = self.model(label_data_q, branch="labeled")
                 record_all_unlabel_data = self.model(unlabel_data_q, branch="unlabeled")
@@ -192,10 +193,11 @@ class ActiveTrainer(DefaultTrainer):
             else:
                 losses.backward()
 
-        self._write_metrics(record_dict)
         self.accumulate_steps += 1
 
         if self.accumulate_steps % self.accumulation == 0:
+            self._write_metrics(record_dict)
+
             if self.cfg.SOLVER.AMP.ENABLED:
                 self._trainer.grad_scaler.step(self.optimizer)
                 self._trainer.grad_scaler.update()
@@ -328,9 +330,9 @@ class ActiveTrainer(DefaultTrainer):
     def create_pseudo_label(
         self, unlabel_data, pred_teacher, raw_pred_teacher, nms_method
     ):
-        # pred_teacher_loc = self.pseudo_generator.nms_from_dense(
-        #     raw_pred_teacher, nms_method=self.cfg.MODEL.FCOS.NMS_CRITERIA_REG_TRAIN
-        # )
+        pred_teacher_loc = self.pseudo_generator.nms_from_dense(
+            raw_pred_teacher, nms_method=nms_method
+        )
 
         threshold, threshold_reg = self.set_threshold()
 
@@ -347,23 +349,23 @@ class ActiveTrainer(DefaultTrainer):
         )
         joint_proposal_dict["proposals_pseudo_cls"] = pesudo_proposals_roih_unsup_k
 
-        # (
-        #     pesudo_proposals_roih_unsup_k_reg,
-        #     _,
-        # ) = self.pseudo_generator.process_pseudo_label(
-        #     pred_teacher_loc,
-        #     threshold_reg,
-        #     "roih",
-        #     self.cfg.SEMISUPNET.PSEUDO_BBOX_SAMPLE_REG,
-        # )
-        # joint_proposal_dict["proposals_pseudo_reg"] = pesudo_proposals_roih_unsup_k_reg
+        (
+            pesudo_proposals_roih_unsup_k_reg,
+            _,
+        ) = self.pseudo_generator.process_pseudo_label(
+            pred_teacher_loc,
+            threshold_reg,
+            "roih",
+            self.cfg.SEMISUPNET.PSEUDO_BBOX_SAMPLE_REG,
+        )
+        joint_proposal_dict["proposals_pseudo_reg"] = pesudo_proposals_roih_unsup_k_reg
 
         unlabel_data = add_label(
-            unlabel_data, joint_proposal_dict["proposals_pseudo_cls"], ""
+            unlabel_data, joint_proposal_dict["proposals_pseudo_cls"], "class"
         )
-        # unlabel_data = add_label(
-        #     unlabel_data, joint_proposal_dict["proposals_pseudo_reg"], "reg"
-        # )
+        unlabel_data = add_label(
+            unlabel_data, joint_proposal_dict["proposals_pseudo_reg"], "reg"
+        )
 
         # unlabeled data pseudo-labeling
         for data in unlabel_data:

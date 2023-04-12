@@ -48,7 +48,6 @@ class FCOS(nn.Module):
         self.in_features = cfg.MODEL.FCOS.IN_FEATURES
         self.fpn_strides = cfg.MODEL.FCOS.FPN_STRIDES
         self.yield_proposal = cfg.MODEL.FCOS.YIELD_PROPOSAL
-        # self.yield_box_feats = cfg.MODEL.FCOS.YIELD_BOX_FEATURES
 
         self.kl_loss = cfg.MODEL.FCOS.KL_LOSS
         self.kl_loss_type = cfg.MODEL.FCOS.KL_LOSS_TYPE
@@ -78,9 +77,6 @@ class FCOS(nn.Module):
         features = [features[f] for f in self.in_features]
         locations = self.compute_locations(features)
 
-        # accumlate feature pred for pseudo-labeling
-        raw_output = {}
-
         (
             logits_pred,
             reg_pred,
@@ -89,15 +85,6 @@ class FCOS(nn.Module):
             top_feats,
             bbox_towers,
         ) = self.fcos_head(features, top_module, self.yield_proposal)
-
-        raw_output["reg_pred_std"] = reg_pred_std
-        raw_output["logits_pred"] = logits_pred
-        raw_output["reg_pred"] = reg_pred
-        raw_output["top_feats"] = top_feats
-        raw_output["bbox_towers"] = bbox_towers
-        raw_output["locations"] = locations
-        raw_output["ctrness_pred"] = ctrness_pred
-        raw_output["image_sizes"] = images.image_sizes
 
         if self.training:
             losses = self.fcos_outputs.losses(
@@ -126,6 +113,8 @@ class FCOS(nn.Module):
                 nms_method,
             )
             if output_raw:
+                raw_output = {"reg_pred_std": reg_pred_std, "logits_pred": logits_pred, "reg_pred": reg_pred, "top_feats": top_feats,
+                              "bbox_towers": bbox_towers, "locations": locations, "ctrness_pred": ctrness_pred, "image_sizes": images.image_sizes}
                 return results, raw_output
             else:
                 return results

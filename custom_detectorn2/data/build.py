@@ -135,48 +135,24 @@ def build_detection_test_loader(cfg, dataset_name, mapper=None):
 
 # uesed by unbiased teacher trainer
 def build_detection_semisup_train_loader_two_crops(cfg, mapper=None):
-    if cfg.DATASETS.CROSS_DATASET:  # cross-dataset (e.g., coco-additional)
-        label_dicts = get_detection_dataset_dicts(
-            cfg.DATASETS.TRAIN_LABEL,
-            filter_empty=cfg.DATALOADER.FILTER_EMPTY_ANNOTATIONS,
-            min_keypoints=cfg.MODEL.ROI_KEYPOINT_HEAD.MIN_KEYPOINTS_PER_IMAGE
-            if cfg.MODEL.KEYPOINT_ON
-            else 0,
-            proposal_files=cfg.DATASETS.PROPOSAL_FILES_TRAIN
-            if cfg.MODEL.LOAD_PROPOSALS
-            else None,
-        )
+    dataset_dicts = get_detection_dataset_dicts(
+        cfg.DATASETS.TRAIN,
+        filter_empty=cfg.DATALOADER.FILTER_EMPTY_ANNOTATIONS,
+        min_keypoints=cfg.MODEL.ROI_KEYPOINT_HEAD.MIN_KEYPOINTS_PER_IMAGE
+        if cfg.MODEL.KEYPOINT_ON
+        else 0,
+        proposal_files=cfg.DATASETS.PROPOSAL_FILES_TRAIN
+        if cfg.MODEL.LOAD_PROPOSALS
+        else None,
+    )
 
-        unlabel_dicts = get_detection_dataset_dicts(
-            cfg.DATASETS.TRAIN_UNLABEL,
-            filter_empty=False,
-            min_keypoints=cfg.MODEL.ROI_KEYPOINT_HEAD.MIN_KEYPOINTS_PER_IMAGE
-            if cfg.MODEL.KEYPOINT_ON
-            else 0,
-            proposal_files=cfg.DATASETS.PROPOSAL_FILES_TRAIN
-            if cfg.MODEL.LOAD_PROPOSALS
-            else None,
-        )
-
-    else:  # different degree of supervision (e.g., COCO-supervision)
-        dataset_dicts = get_detection_dataset_dicts(
-            cfg.DATASETS.TRAIN,
-            filter_empty=cfg.DATALOADER.FILTER_EMPTY_ANNOTATIONS,
-            min_keypoints=cfg.MODEL.ROI_KEYPOINT_HEAD.MIN_KEYPOINTS_PER_IMAGE
-            if cfg.MODEL.KEYPOINT_ON
-            else 0,
-            proposal_files=cfg.DATASETS.PROPOSAL_FILES_TRAIN
-            if cfg.MODEL.LOAD_PROPOSALS
-            else None,
-        )
-
-        # Divide into labeled and unlabeled sets according to supervision percentage
-        label_dicts, unlabel_dicts = divide_label_unlabel(
-            dataset_dicts,
-            cfg.DATALOADER.SUP_PERCENT,
-            cfg.DATALOADER.RANDOM_DATA_SEED,
-            cfg.DATALOADER.RANDOM_DATA_SEED_PATH,
-        )
+    # Divide into labeled and unlabeled sets according to supervision percentage
+    label_dicts, unlabel_dicts = divide_label_unlabel(
+        dataset_dicts,
+        cfg.DATALOADER.SUP_PERCENT,
+        cfg.DATALOADER.RANDOM_DATA_SEED,
+        cfg.DATALOADER.RANDOM_DATA_SEED_PATH,
+    )
 
     label_dataset = DatasetFromList(label_dicts, copy=False)
     # exclude the labeled set from unlabeled dataset

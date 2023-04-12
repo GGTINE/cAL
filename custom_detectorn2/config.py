@@ -45,8 +45,6 @@ def add_ubteacher_config(cfg):
 
     _C.SEMISUPNET.PSEUDO_CLS_IGNORE_NEAR = False
     _C.SEMISUPNET.SOFT_CLS_LABEL = False
-    _C.SEMISUPNET.CLS_LOSS_METHOD = "focal"
-    _C.SEMISUPNET.CLS_LOSS_PSEUDO_METHOD = "focal"
 
     _C.SEMISUPNET.REG_FG_THRES = 0.5
 
@@ -147,7 +145,6 @@ def add_ubteacher_config(cfg):
     _C.MODEL.FCOS.NUM_CLS_CONVS = 4
     _C.MODEL.FCOS.NUM_BOX_CONVS = 4
     _C.MODEL.FCOS.NUM_SHARE_CONVS = 0
-    _C.MODEL.FCOS.CENTER_SAMPLE = True
     _C.MODEL.FCOS.POS_RADIUS = 1.5
     _C.MODEL.FCOS.LOC_LOSS_TYPE = "giou"
     _C.MODEL.FCOS.YIELD_PROPOSAL = False
@@ -158,10 +155,7 @@ def add_ubteacher_config(cfg):
     _C.MODEL.FCOS.NMS_CRITERIA_REG_TRAIN = "cls_n_loc"
 
     _C.MODEL.FCOS.REG_DISCRETE = False
-    _C.MODEL.FCOS.DFL_WEIGHT = 0.0
     _C.MODEL.FCOS.LOC_FUN_ALL = "mean"
-
-    _C.MODEL.FCOS.UNIFY_CTRCLS = False
 
     _C.MODEL.FCOS.REG_MAX = 16
 
