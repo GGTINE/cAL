@@ -62,10 +62,8 @@ class FCOS(nn.Module):
         images,
         features,
         gt_instances=None,
-        top_module=None,
         output_raw=False,
         nms_method="cls_n_ctr",
-        ignore_near=False,
         branch="labeled",
     ):
         """
@@ -82,9 +80,8 @@ class FCOS(nn.Module):
             reg_pred,
             reg_pred_std,
             ctrness_pred,
-            top_feats,
             bbox_towers,
-        ) = self.fcos_head(features, top_module, self.yield_proposal)
+        ) = self.fcos_head(features, self.yield_proposal)
 
         if self.training:
             losses = self.fcos_outputs.losses(
@@ -94,8 +91,6 @@ class FCOS(nn.Module):
                 locations,
                 gt_instances,
                 reg_pred_std,
-                top_feats,
-                ignore_near,
                 branch=branch
             )
 
@@ -109,11 +104,10 @@ class FCOS(nn.Module):
                 locations,
                 images.image_sizes,
                 reg_pred_std,
-                top_feats,
                 nms_method,
             )
             if output_raw:
-                raw_output = {"reg_pred_std": reg_pred_std, "logits_pred": logits_pred, "reg_pred": reg_pred, "top_feats": top_feats,
+                raw_output = {"reg_pred_std": reg_pred_std, "logits_pred": logits_pred, "reg_pred": reg_pred,
                               "bbox_towers": bbox_towers, "locations": locations, "ctrness_pred": ctrness_pred, "image_sizes": images.image_sizes}
                 return results, raw_output
             else:
@@ -253,7 +247,6 @@ class FCOSHead(nn.Module):
         bbox_reg = []
         bbox_reg_std = []
         ctrness = []
-        top_feats = []
         bbox_towers = []
         for l, feature in enumerate(x):
             feature = self.share_tower(feature)
@@ -282,7 +275,4 @@ class FCOSHead(nn.Module):
             else:
                 bbox_reg_std = None
 
-            if top_module is not None:
-                top_feats.append(top_module(bbox_tower))
-
-        return logits, bbox_reg, bbox_reg_std, ctrness, top_feats, bbox_towers
+        return logits, bbox_reg, bbox_reg_std, ctrness, bbox_towers

@@ -59,10 +59,8 @@ class NLLoss(nn.Module):
     def forward(self, input, input_std, target, iou_weight=None):
         sigma_sq = torch.square(input_std.sigmoid())
         first_term = torch.square(target - input) / (2 * sigma_sq)
-        second_term = 0.5 * torch.log(sigma_sq)
-        sum_before_iou = (first_term + second_term).sum(dim=1) + 2 * torch.log(
-            2 * torch.Tensor([torch.pi]).cuda()
-        )
+        second_term = 0.5 * sigma_sq
+        sum_before_iou = (first_term + second_term).sum(dim=1)
         loss_mean = (sum_before_iou * iou_weight).mean()
 
         return loss_mean

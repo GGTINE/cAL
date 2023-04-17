@@ -64,7 +64,6 @@ class OneStageDetector(nn.Module):
         batched_inputs,
         output_raw=False,
         nms_method="cls_n_ctr",
-        ignore_near=False,
         branch="labeled",
     ):
         images = [x["image"].to(self.device) for x in batched_inputs]
@@ -89,7 +88,6 @@ class OneStageDetector(nn.Module):
                 features,
                 gt_instances,
                 nms_method=nms_method,
-                ignore_near=ignore_near,
                 branch=branch,
             )
             return proposal_losses
@@ -102,7 +100,6 @@ class OneStageDetector(nn.Module):
                     gt_instances,
                     output_raw=True,
                     nms_method=nms_method,
-                    ignore_near=ignore_near,
                     branch=branch,
                 )
                 return proposals, raw_pred
@@ -113,7 +110,6 @@ class OneStageDetector(nn.Module):
                     gt_instances,
                     output_raw=False,
                     nms_method=nms_method,
-                    ignore_near=ignore_near,
                     branch=branch,
                 )
                 processed_results = []

@@ -34,7 +34,6 @@ from custom_detectorn2.modeling.meta_arch.ts_ensemble import EnsembleTSModel
 from custom_detectorn2.modeling.pseudo_generator import PseudoGenerator
 from custom_detectorn2.solver.build import build_lr_scheduler
 from custom_detectorn2.evaluation.evaluator import inference_on_dataset
-from custom_detectorn2.utils.visual import visual_img
 
 
 class ActiveTrainer(DefaultTrainer):
@@ -46,7 +45,7 @@ class ActiveTrainer(DefaultTrainer):
         with matching heuristics.
         """
         cfg = DefaultTrainer.auto_scale_workers(cfg, comm.get_world_size())
-        self.accumulation = 4
+        self.accumulation = 2
         self.accumulate_steps = 0
 
         # Student 모델 생성

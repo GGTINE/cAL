@@ -118,7 +118,6 @@ class FCOSOutputs(nn.Module):
         # bin offset classification
         self.reg_discrete = cfg.MODEL.FCOS.REG_DISCRETE
         self.reg_max = cfg.MODEL.FCOS.REG_MAX
-        # self.fpn_stride = torch.tensor(cfg.MODEL.FCOS.FPN_STRIDES).cuda().float()
 
         # kl loss
         self.kl_loss = cfg.MODEL.FCOS.KL_LOSS
@@ -141,20 +140,6 @@ class FCOSOutputs(nn.Module):
 
         self.loc_loss_func = IOULoss(cfg.MODEL.FCOS.LOC_LOSS_TYPE)
 
-        # Quality estimation
-        self.quality_est = cfg.MODEL.FCOS.QUALITY_EST
-
-        # TS better classification
-        self.tsbetter_cls_sigma = cfg.MODEL.FCOS.TSBETTER_CLS_SIGMA
-
-        # TS better
-        self.tsbetter_reg = cfg.SEMISUPNET.TS_BETTER
-        self.tsbetter_reg_cert = cfg.SEMISUPNET.TS_BETTER_CERT
-
-        # Ratio
-        # self.fg_bg_ratio = cfg.MODEL.FCOS.FG_BG_RATIO
-
-        # generate sizes of interest
         soi = []
         prev_size = -1
         for s in cfg.MODEL.FCOS.SIZES_OF_INTEREST:
@@ -174,8 +159,6 @@ class FCOSOutputs(nn.Module):
         locations,
         gt_instances,
         reg_pred_std=None,
-        top_feats=None,
-        ignore_near=False,
         branch="labeled"
     ):
         loss_dict = {}
@@ -185,17 +168,16 @@ class FCOSOutputs(nn.Module):
             reg_pred=reg_pred,
             ctrness_pred=ctrness_pred,
             reg_pred_std=reg_pred_std,
-            top_feats=top_feats,
             branch=branch,
         )
         if branch == "labeled":
-            training_targets = self._get_ground_truth(locations, gt_instances, ignore_near)
+            training_targets = self._get_ground_truth(locations, gt_instances)
             instances = instance_builder(training_targets)
             loss_dict.update(self.fcos_losses(instances, branch))
         elif branch == "unlabeled":
             label_type = ['cls', 'reg']
             for i in label_type:
-                training_targets = self._get_ground_truth(locations, gt_instances[i], ignore_near)
+                training_targets = self._get_ground_truth(locations, gt_instances[i])
                 instances = instance_builder(training_targets)
                 loss_dict.update(self.fcos_losses(instances, i))
         else:
@@ -204,9 +186,6 @@ class FCOSOutputs(nn.Module):
         return loss_dict
 
     def fcos_losses(self, instances, branch):
-        if instances.keep_locations.sum() > 0:  # some instances are not ignored
-            instances = instances[instances.keep_locations]
-
         num_classes = instances.logits_pred.size(1)
         assert num_classes == self.num_classes
 
@@ -251,19 +230,6 @@ class FCOSOutputs(nn.Module):
 
         # regression loss
         reg_pred_std = instances.reg_pred_std
-        # if self.reg_unsup_loss == "ts_locvar_better_nms_nll_l1" and branch == "unlabeled":
-        #     loc_conf_student = 1 - instances.reg_pred_std.sigmoid()
-        #     loc_conf_teacher = 1 - instances.boundary_vars.sigmoid()
-        #     select = (loc_conf_teacher > self.tsbetter_reg_cert) * (
-        #         loc_conf_teacher > loc_conf_student + self.tsbetter_reg
-        #     )
-        #
-        #     reg_student = reg_pred
-        #     reg_teacher = instances.reg_targets
-        #
-        #     reg_loss = F.smooth_l1_loss(
-        #         reg_student[select], reg_teacher[select], beta=0.0)
-
         iou, iou_loss = (
             self.loc_loss_func(reg_pred, instances.reg_targets, ctrness_targets, loss_denorm)
         )
@@ -337,19 +303,11 @@ class FCOSOutputs(nn.Module):
         reg_pred,
         ctrness_pred,
         reg_pred_std,
-        top_feats,
         branch
     ):
         instances = Instances((0, 0))
         instances.labels = cat(
             [x.reshape(-1) for x in training_targets["labels"]], dim=0
-        )
-        instances.gt_inds = cat(
-            [x.reshape(-1) for x in training_targets["target_inds"]], dim=0
-        )
-
-        instances.im_inds = cat(
-            [x.reshape(-1) for x in training_targets["im_inds"]], dim=0
         )
         instances.reg_targets = cat(
             [x.reshape(-1, 4) for x in training_targets["reg_targets"]], dim=0
@@ -357,19 +315,6 @@ class FCOSOutputs(nn.Module):
         instances.locations = cat(
             [x.reshape(-1, 2) for x in training_targets["locations"]], dim=0
         )
-        instances.fpn_levels = cat(
-            [x.reshape(-1) for x in training_targets["fpn_levels"]], dim=0
-        )
-
-        # if branch == "unlabeled":
-        #     instances.boundary_vars = cat(
-        #         [
-        #             x.reshape(-1, 4)
-        #             for x in training_targets["boundary_vars"]
-        #         ],
-        #         dim=0,
-        #     )
-
         instances.logits_pred = cat(
             [x.permute(0, 2, 3, 1).reshape(-1, self.num_classes) for x in logits_pred],
             dim=0,
@@ -391,24 +336,11 @@ class FCOSOutputs(nn.Module):
         instances.ctrness_pred = cat(
             [x.permute(0, 2, 3, 1).reshape(-1) for x in ctrness_pred], dim=0
         )
-        instances.box_weights = cat(
-            [x.reshape(-1) for x in training_targets["box_weights"]], dim=0
-        )
-        instances.keep_locations = cat(
-            [x.reshape(-1) for x in training_targets["keep_locations"]], dim=0
-        )
-
         if self.kl_loss:
             assert reg_pred_std is not None
             instances.reg_pred_std = cat(
                 [x.permute(0, 2, 3, 1).reshape(-1, 4) for x in reg_pred_std], dim=0
             )
-
-        if len(top_feats) > 0:
-            instances.top_feats = cat(
-                [x.permute(0, 2, 3, 1).reshape(-1, x.size(1)) for x in top_feats], dim=0
-            )
-
         return instances
 
     # other functions
@@ -427,7 +359,7 @@ class FCOSOutputs(nn.Module):
             targets_level_first.append(torch.cat(targets_per_level, dim=0))
         return targets_level_first
 
-    def _get_ground_truth(self, locations, gt_instances, ignore_near=False):
+    def _get_ground_truth(self, locations, gt_instances):
         num_loc_list = [len(loc) for loc in locations]
         # compute locations to size ranges
         loc_to_size_range = []
@@ -448,27 +380,16 @@ class FCOSOutputs(nn.Module):
 
         # compute the reg, label target for each element
         training_targets = self.compute_targets_for_locations(
-            locations, gt_instances, loc_to_size_range, num_loc_list, ignore_near
+            locations, gt_instances, loc_to_size_range
         )
 
         training_targets["locations"] = [
             locations.clone() for _ in range(len(gt_instances))
         ]
-        training_targets["im_inds"] = [
-            locations.new_ones(locations.size(0), dtype=torch.long) * i
-            for i in range(len(gt_instances))
-        ]
-
         # transpose im first training_targets to level first ones
         training_targets = {
             k: self._transpose(v, num_loc_list) for k, v in training_targets.items()
         }
-
-        training_targets["fpn_levels"] = [
-            loc.new_ones(len(loc), dtype=torch.long) * level
-            for level, loc in enumerate(training_targets["locations"])
-        ]
-
         # we normalize reg_targets by FPN's strides here
         # reg_targets is normalized for each level!
         #  this is ltrb format
@@ -550,18 +471,13 @@ class FCOSOutputs(nn.Module):
         return inside_gt_bbox_mask
 
     def compute_targets_for_locations(
-        self, locations, targets, size_ranges, num_loc_list, ignore_near=False
+        self, locations, targets, size_ranges
     ):
         labels = []
         reg_targets = []
-        target_inds = []
-        keep_locations = []
-        box_weights = []
-        # boundary_vars = []
 
         xs, ys = locations[:, 0], locations[:, 1]
 
-        num_targets = 0
         for im_i in range(len(targets)):  # image-wise operation
             targets_per_im = targets[im_i]
             bboxes = targets_per_im.gt_boxes.tensor
@@ -573,11 +489,6 @@ class FCOSOutputs(nn.Module):
             else:
                 box_weights_per_im = torch.ones_like(targets_per_im.gt_classes)
 
-            # if targets_per_im.has("reg_pred_std"):
-            #     boundary_var_per_im = targets_per_im.reg_pred_std
-            # else:
-            #     boundary_var_per_im = torch.zeros_like(targets_per_im.gt_boxes.tensor)
-
             # no gt
             if bboxes.numel() == 0:
                 # no bboxes then all labels are background
@@ -586,11 +497,6 @@ class FCOSOutputs(nn.Module):
                 )
                 # no bboxes then all boxes weights are zeros
                 reg_targets.append(locations.new_zeros((locations.size(0), 4)))
-                target_inds.append(labels_per_im.new_zeros(locations.size(0)) - 1)
-
-                box_weights.append(box_weights_per_im.new_zeros(locations.size(0)))
-                # boundary_vars.append(locations.new_zeros((locations.size(0), 4)))
-                keep_locations.append(torch.zeros(xs.shape[0]).to(bool).cuda())
                 continue
 
             area = targets_per_im.gt_boxes.area()
@@ -602,7 +508,6 @@ class FCOSOutputs(nn.Module):
             reg_targets_per_im = torch.stack([l, t, r, b], dim=2)
 
             is_in_boxes = reg_targets_per_im.min(dim=2)[0] > 0
-            keep_location = torch.ones(is_in_boxes.shape[0]).to(bool).cuda()
 
             # filter out these box is too small or too big for each scale
             max_reg_targets_per_im = reg_targets_per_im.max(dim=2)[0]
@@ -624,40 +529,14 @@ class FCOSOutputs(nn.Module):
                 dim=1
             )
 
-            # use the minial area as creteria to choose ground-truth boxes of regression for each point
-            reg_targets_per_im = reg_targets_per_im[
-                range(len(locations)), locations_to_gt_inds
-            ]
-
-            # regard object in different image as different instance
-            target_inds_per_im = locations_to_gt_inds + num_targets
-            num_targets += len(targets_per_im)
-
             labels_per_im = labels_per_im[locations_to_gt_inds]
             labels_per_im[locations_to_min_area == INF] = self.num_classes
 
-            # TODO: background weight is 1.0 for now; we could try to use average score as background weights
-            box_weights_per_im = box_weights_per_im[locations_to_gt_inds]
-            box_weights_per_im[locations_to_min_area == INF] = 1.0
-
-            # boundary_var_per_im = boundary_var_per_im[locations_to_gt_inds]
-            # boundary_var_per_im[locations_to_min_area == INF] = 99999.0
-
             labels.append(labels_per_im)
             reg_targets.append(reg_targets_per_im)
-            target_inds.append(target_inds_per_im)
-
-            box_weights.append(box_weights_per_im)
-            keep_locations.append(keep_location)
-            # boundary_vars.append(boundary_var_per_im)
-
         return {
             "labels": labels,
-            "box_weights": box_weights,
             "reg_targets": reg_targets,
-            "target_inds": target_inds,
-            "keep_locations": keep_locations,
-            # "boundary_vars": boundary_vars,
         }
 
     def predict_proposals(
@@ -668,7 +547,6 @@ class FCOSOutputs(nn.Module):
         locations,
         image_sizes,
         reg_pred_std=None,
-        top_feats=None,
         nms_method="cls_n_ctr",
     ):
 
@@ -690,9 +568,6 @@ class FCOSOutputs(nn.Module):
             "c": ctrness_pred,
             "s": self.strides,
         }
-
-        if len(top_feats) > 0:
-            bundle["t"] = top_feats
 
         if reg_pred_std is not None:
             bundle["r_std"] = reg_pred_std
@@ -726,21 +601,14 @@ class FCOSOutputs(nn.Module):
                 r_cls = None
 
             c = per_bundle["c"]
-            t = per_bundle["t"] if "t" in bundle else None
 
             r_std = per_bundle["r_std"] if "r_std" in bundle else None
 
             sampled_boxes.append(
                 self.forward_for_single_feature_map(
-                    l, o, r, r_cls, c, image_sizes, r_std, t, nms_method
+                    l, o, r, r_cls, c, image_sizes, r_std, nms_method
                 )
             )
-
-            for per_im_sampled_boxes in sampled_boxes[-1]:
-                per_im_sampled_boxes.fpn_levels = (
-                    l.new_ones(len(per_im_sampled_boxes), dtype=torch.long) * i
-                )
-
         # nms
         boxlists = list(zip(*sampled_boxes))
         boxlists = [Instances.cat(boxlist) for boxlist in boxlists]
@@ -757,7 +625,6 @@ class FCOSOutputs(nn.Module):
         ctrness_pred,
         image_sizes,
         reg_pred_std=None,
-        top_feat=None,
         nms_method="cls_n_ctr",
     ):
         N, C, H, W = logits_pred.shape
@@ -768,9 +635,6 @@ class FCOSOutputs(nn.Module):
         box_regression = box_regression.reshape(N, -1, 4)
         ctrness_pred = ctrness_pred.view(N, 1, H, W).permute(0, 2, 3, 1)
         ctrness_pred = ctrness_pred.reshape(N, -1).sigmoid()
-        if top_feat is not None:
-            top_feat = top_feat.view(N, -1, H, W).permute(0, 2, 3, 1)
-            top_feat = top_feat.reshape(N, H * W, -1)
 
         if reg_pred_cls is not None:
             box_reg_cls = (
@@ -838,10 +702,6 @@ class FCOSOutputs(nn.Module):
             per_cls_conf = cls_confs[i]
             per_cls_conf = per_cls_conf[per_candidate_inds]
 
-            if top_feat is not None:
-                per_top_feat = top_feat[i]
-                per_top_feat = per_top_feat[per_box_loc]
-
             # select top k
             per_pre_nms_top_n = pre_nms_top_n[i]
 
@@ -862,9 +722,6 @@ class FCOSOutputs(nn.Module):
 
                 per_centerness = per_centerness[top_k_indices]
                 per_cls_conf = per_cls_conf[top_k_indices]
-
-                if top_feat is not None:
-                    per_top_feat = per_top_feat[top_k_indices]
 
             detections = torch.stack(
                 [
@@ -902,8 +759,6 @@ class FCOSOutputs(nn.Module):
             boxlist.centerness = per_centerness
             boxlist.cls_confid = per_cls_conf
 
-            if top_feat is not None:
-                boxlist.top_feat = per_top_feat
             results.append(boxlist)
 
         return results

@@ -14,7 +14,6 @@ class PseudoGenerator:
 
         logits_pred = raw_output["logits_pred"]
         reg_pred = raw_output["reg_pred"]
-        top_feats = raw_output["top_feats"]
         locations = raw_output["locations"]
         ctrness_pred = raw_output["ctrness_pred"]
         image_sizes = raw_output["image_sizes"]
@@ -30,7 +29,6 @@ class PseudoGenerator:
             locations,
             image_sizes,
             reg_pred_std,
-            top_feats,
             nms_method,
         )
 
